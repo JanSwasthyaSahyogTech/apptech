@@ -20,26 +20,50 @@
 #define OLED_RESET -1
 #define OLED_I2C_ADDRESS 0x3C
 
-// I2C Pins (ESP8266/ESP32)
-#define I2C_SDA_PIN 4
-#define I2C_SCL_PIN 5
+// I2C Pins (Platform-specific)
+#ifdef ESP32
+  #define I2C_SDA_PIN 21
+  #define I2C_SCL_PIN 22
+#elif defined(ESP8266)
+  #define I2C_SDA_PIN 4
+  #define I2C_SCL_PIN 5
+#else
+  // Arduino Uno uses fixed I2C pins (A4=SDA, A5=SCL)
+  // No need to define custom pins
+#endif
 
 // Reporting interval
 #define REPORTING_PERIOD_MS 1000
 
-// BPM Debounce Settings
-#define BPM_TOLERANCE 5.0f                   // BPM readings within this range are considered equal
-#define BPM_STABILITY_DURATION_MS 3000       // How long BPM must be stable (milliseconds)
-#define BPM_SAMPLE_INTERVAL_MS 100           // Time between BPM samples (milliseconds)
-#define BPM_MIN_VALID 40.0f                  // Minimum valid BPM
-#define BPM_MAX_VALID 200.0f                 // Maximum valid BPM
+// BPM Debounce Settings (optimized for Arduino Uno)
+#ifdef ARDUINO_AVR_UNO
+  #define BPM_TOLERANCE 5.0f
+  #define BPM_STABILITY_DURATION_MS 2000
+  #define BPM_SAMPLE_INTERVAL_MS 200
+  #define BPM_MIN_VALID 40.0f
+  #define BPM_MAX_VALID 200.0f
+#else
+  #define BPM_TOLERANCE 5.0f
+  #define BPM_STABILITY_DURATION_MS 3000
+  #define BPM_SAMPLE_INTERVAL_MS 100
+  #define BPM_MIN_VALID 40.0f
+  #define BPM_MAX_VALID 200.0f
+#endif
 
-// SpO2 Debounce Settings
-#define SPO2_TOLERANCE 2                     // SpO2 readings within this range are considered equal
-#define SPO2_STABILITY_DURATION_MS 3000      // How long SpO2 must be stable (milliseconds)
-#define SPO2_SAMPLE_INTERVAL_MS 100          // Time between SpO2 samples (milliseconds)
-#define SPO2_MIN_VALID 50                    // Minimum valid SpO2 (supports high altitude/critical patients)
-#define SPO2_MAX_VALID 100                   // Maximum valid SpO2
+// SpO2 Debounce Settings (optimized for Arduino Uno)
+#ifdef ARDUINO_AVR_UNO
+  #define SPO2_TOLERANCE 2
+  #define SPO2_STABILITY_DURATION_MS 2000
+  #define SPO2_SAMPLE_INTERVAL_MS 200
+  #define SPO2_MIN_VALID 50
+  #define SPO2_MAX_VALID 100
+#else
+  #define SPO2_TOLERANCE 2
+  #define SPO2_STABILITY_DURATION_MS 3000
+  #define SPO2_SAMPLE_INTERVAL_MS 100
+  #define SPO2_MIN_VALID 50
+  #define SPO2_MAX_VALID 100
+#endif
 
 // ============================================
 // ReadingDebouncer Template Class
@@ -171,8 +195,16 @@ void onBeatDetected() {
 // ============================================
 
 void setup() {
-    Serial.begin(115200);
-    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    #ifdef ESP32
+        Serial.begin(115200);
+        Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    #elif defined(ESP8266)
+        Serial.begin(115200);
+        Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    #else
+        Serial.begin(9600);
+        Wire.begin();
+    #endif
 
     // Initialize OLED
     if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDRESS)) {
@@ -222,72 +254,63 @@ void loop() {
         // Clear display
         display.clearDisplay();
         
-        // Check if finger is detected (both readings valid)
+        // Check if finger is detected
         bool fingerDetected = bpmDebouncer.hasValidReading() || spo2Debouncer.hasValidReading();
         
         if (!fingerDetected && rawBpm == 0 && rawSpo2 == 0) {
-            // No finger detected
-            display.setTextSize(2);
-            display.setCursor(5, 20);
-            display.println("Place");
-            display.setCursor(5, 40);
-            display.println("finger");
+            // No finger detected - minimal display
+            display.setTextSize(1);
+            display.setCursor(20, 25);
+            display.println("Place finger");
         } else {
-            // Display BPM
-            display.setTextSize(2);
+            // Compact display format for Arduino Uno
+            display.setTextSize(1);
             display.setCursor(0, 0);
             display.print("BPM:");
             
-            display.setTextSize(1);
-            display.setCursor(55, 5);
             if (bpmDebouncer.isStable()) {
                 display.print((int)bpmDebouncer.getStableReading());
-                display.print(" OK");
+                display.print("*");
             } else if (bpmDebouncer.hasValidReading()) {
                 display.print((int)rawBpm);
-                display.print(" ...");
+                display.print("?");
             } else {
-                display.print("---");
+                display.print("--");
             }
             
-            // Display SpO2
-            display.setTextSize(2);
-            display.setCursor(0, 25);
-            display.print("SpO2:");
-            
-            display.setTextSize(1);
-            display.setCursor(65, 30);
+            // SpO2 on same line
+            display.setCursor(70, 0);
+            display.print("O2:");
             if (spo2Debouncer.isStable()) {
                 display.print(spo2Debouncer.getStableReading());
-                display.print("% OK");
+                display.print("*");
             } else if (spo2Debouncer.hasValidReading()) {
                 display.print(rawSpo2);
-                display.print("% ...");
+                display.print("?");
             } else {
-                display.print("---");
+                display.print("--");
             }
             
-            // Status line
-            display.setTextSize(1);
-            display.setCursor(0, 50);
+            // Status indicator
+            display.setCursor(0, 15);
             if (bpmDebouncer.isStable() && spo2Debouncer.isStable()) {
-                display.print("Readings stable");
+                display.println("STABLE");
             } else {
-                display.print("Stabilizing...");
+                display.println("Stabilizing");
             }
         }
         
         display.display();
         
-        // Serial output
-        Serial.print("BPM: ");
+        // Serial output (minimal for Arduino Uno)
+        Serial.print("BPM:");
         Serial.print(rawBpm);
-        Serial.print(" (");
-        Serial.print(bpmDebouncer.isStable() ? "STABLE" : "unstable");
-        Serial.print(") | SpO2: ");
+        Serial.print("(");
+        Serial.print(bpmDebouncer.isStable() ? "OK" : "...");
+        Serial.print(") O2:");
         Serial.print(rawSpo2);
-        Serial.print("% (");
-        Serial.print(spo2Debouncer.isStable() ? "STABLE" : "unstable");
+        Serial.print("(");
+        Serial.print(spo2Debouncer.isStable() ? "OK" : "...");
         Serial.println(")");
         
         tsLastReport = millis();

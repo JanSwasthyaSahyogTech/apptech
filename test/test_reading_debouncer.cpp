@@ -4,6 +4,13 @@
 #include <cmath>
 #include "reading_debouncer.h"
 
+// ============================================
+// Platform-Specific Parameters
+// ============================================
+// Arduino Uno: BPM stability=2000ms, interval=200ms; SpO2 stability=2000ms, interval=200ms
+// ESP32/ESP8266: BPM stability=3000ms, interval=100ms; SpO2 stability=3000ms, interval=100ms
+// Tests use Arduino Uno optimized parameters for compatibility
+
 // Simple test framework
 int testsRun = 0;
 int testsPassed = 0;
@@ -48,8 +55,8 @@ int testsFailed = 0;
 // ============================================
 
 TEST(test_bpm_initial_state) {
-    // BPM: tolerance=5, stability=3000ms, interval=100ms, valid range 40-200
-    ReadingDebouncer<float> bpmDebouncer(5.0f, 3000, 100, 40.0f, 200.0f);
+    // BPM: tolerance=5, stability=2000ms (Uno) or 3000ms (ESP), interval=200ms (Uno) or 100ms (ESP), valid range 40-200
+    ReadingDebouncer<float> bpmDebouncer(5.0f, 2000, 200, 40.0f, 200.0f);
     ASSERT_FALSE(bpmDebouncer.isStable());
     ASSERT_FALSE(bpmDebouncer.hasValidReading());
     ASSERT_FLOAT_EQ(0.0f, bpmDebouncer.getStableReading(), 0.01f);
@@ -137,8 +144,8 @@ TEST(test_bpm_invalid_reading_resets_state) {
 // ============================================
 
 TEST(test_spo2_initial_state) {
-    // SpO2: tolerance=2, stability=3000ms, interval=100ms, valid range 70-100
-    ReadingDebouncer<int> spo2Debouncer(2, 3000, 100, 50, 100);
+    // SpO2: tolerance=2, stability=2000ms (Uno) or 3000ms (ESP), interval=200ms (Uno) or 100ms (ESP), valid range 50-100
+    ReadingDebouncer<int> spo2Debouncer(2, 2000, 200, 50, 100);
     ASSERT_FALSE(spo2Debouncer.isStable());
     ASSERT_FALSE(spo2Debouncer.hasValidReading());
 }
@@ -210,7 +217,7 @@ TEST(test_spo2_boundary_valid_values) {
 // ============================================
 
 TEST(test_sample_interval_respected) {
-    ReadingDebouncer<int> debouncer(2, 500, 100, 50, 100);
+    ReadingDebouncer<int> debouncer(2, 500, 200, 50, 100);
     
     debouncer.update(98, 0);
     debouncer.update(98, 50);   // Too soon, ignored
@@ -219,11 +226,11 @@ TEST(test_sample_interval_respected) {
     // Only 1 valid sample, not enough for stability
     ASSERT_FALSE(debouncer.isStable());
     
-    debouncer.update(98, 100);  // Valid
     debouncer.update(98, 200);  // Valid
-    debouncer.update(98, 300);  // Valid
     debouncer.update(98, 400);  // Valid
-    debouncer.update(98, 500);  // Valid - stable now
+    debouncer.update(98, 600);  // Valid
+    debouncer.update(98, 800);  // Valid
+    debouncer.update(98, 1000); // Valid - stable now
     
     ASSERT_TRUE(debouncer.isStable());
 }
@@ -233,7 +240,7 @@ TEST(test_sample_interval_respected) {
 // ============================================
 
 TEST(test_reset_clears_all_state) {
-    ReadingDebouncer<float> debouncer(5.0f, 500, 100, 40.0f, 200.0f);
+    ReadingDebouncer<float> debouncer(5.0f, 500, 200, 40.0f, 200.0f);
     
     // Build to stable
     debouncer.update(72.0f, 0);
@@ -254,7 +261,7 @@ TEST(test_reset_clears_all_state) {
 // ============================================
 
 TEST(test_continuous_update_maintains_stability) {
-    ReadingDebouncer<int> debouncer(2, 500, 100, 50, 100);
+    ReadingDebouncer<int> debouncer(2, 500, 200, 50, 100);
     
     // Reach stable
     debouncer.update(98, 0);
@@ -275,7 +282,7 @@ TEST(test_continuous_update_maintains_stability) {
 }
 
 TEST(test_edge_tolerance_boundary) {
-    ReadingDebouncer<int> debouncer(5, 500, 100, 50, 100);
+    ReadingDebouncer<int> debouncer(5, 500, 200, 50, 100);
     
     debouncer.update(95, 0);
     debouncer.update(100, 200);  // Exactly at tolerance (+5)
@@ -286,7 +293,7 @@ TEST(test_edge_tolerance_boundary) {
 }
 
 TEST(test_just_outside_tolerance) {
-    ReadingDebouncer<int> debouncer(5, 500, 100, 50, 100);
+    ReadingDebouncer<int> debouncer(5, 500, 200, 50, 100);
     
     debouncer.update(90, 0);
     debouncer.update(90, 200);
