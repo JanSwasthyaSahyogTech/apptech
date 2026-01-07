@@ -206,11 +206,47 @@ void setup() {
         Wire.begin();
     #endif
 
+    delay(1000);
+    Serial.println("\n========================================");
+    Serial.println("Pulse Oximeter Initialization");
+    Serial.println("========================================");
+    
+    // Log I2C configuration
+    #ifdef ESP32
+        Serial.println("Board: ESP32");
+        Serial.print("I2C SDA: GPIO ");
+        Serial.println(I2C_SDA_PIN);
+        Serial.print("I2C SCL: GPIO ");
+        Serial.println(I2C_SCL_PIN);
+    #elif defined(ESP8266)
+        Serial.println("Board: ESP8266");
+        Serial.print("I2C SDA: GPIO ");
+        Serial.println(I2C_SDA_PIN);
+        Serial.print("I2C SCL: GPIO ");
+        Serial.println(I2C_SCL_PIN);
+    #else
+        Serial.println("Board: Arduino Uno");
+        Serial.println("I2C SDA: A4");
+        Serial.println("I2C SCL: A5");
+    #endif
+    
+    Serial.print("OLED I2C Address: 0x");
+    Serial.println(OLED_I2C_ADDRESS, HEX);
+    Serial.println();
+
     // Initialize OLED
+    Serial.println("Initializing OLED display...");
     if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDRESS)) {
-        Serial.println("OLED initialization failed");
+        Serial.println("ERROR: OLED initialization failed!");
+        Serial.println("Troubleshooting:");
+        Serial.println("- Check I2C address (expected 0x27)");
+        Serial.println("- Verify SDA/SCL connections");
+        Serial.println("- Check OLED power supply");
+        Serial.println("- Run I2C scanner to detect devices");
         for (;;);
     }
+    Serial.println("SUCCESS: OLED initialized");
+    
     display.clearDisplay();
     
     display.setTextSize(2);  
@@ -220,17 +256,26 @@ void setup() {
     display.setCursor(10, 30);
     display.println("Oximeter");
     display.display();
+    Serial.println("Display: Splash screen shown");
     delay(2000);
 
     // Initialize pulse oximeter
+    Serial.println("\nInitializing MAX30100 sensor...");
     if (!pox.begin()) {
-        Serial.println("MAX30100 initialization failed");
+        Serial.println("ERROR: MAX30100 initialization failed!");
+        Serial.println("Troubleshooting:");
+        Serial.println("- Check I2C address (expected 0x57)");
+        Serial.println("- Verify SDA/SCL connections");
+        Serial.println("- Check sensor power supply (3.3V)");
         for (;;);
-    } else {
-        Serial.println("MAX30100 initialized");
     }
+    Serial.println("SUCCESS: MAX30100 initialized");
     pox.setIRLedCurrent(MAX30100_LED_CURR_7_6MA);
     pox.setOnBeatDetectedCallback(onBeatDetected);
+    
+    Serial.println("\n========================================");
+    Serial.println("Initialization Complete - Ready to measure");
+    Serial.println("========================================\n");
 }
 
 // ============================================
@@ -247,9 +292,25 @@ void loop() {
         float rawBpm = pox.getHeartRate();
         uint8_t rawSpo2 = pox.getSpO2();
         
+        // Log raw sensor readings
+        Serial.print("[");
+        Serial.print(currentTime);
+        Serial.print("ms] RAW - BPM:");
+        Serial.print(rawBpm);
+        Serial.print(" SpO2:");
+        Serial.print(rawSpo2);
+        Serial.println("%");
+        
         // Update debouncers
         bpmDebouncer.update(rawBpm, currentTime);
         spo2Debouncer.update((int)rawSpo2, currentTime);
+        
+        // Log debouncer status
+        Serial.print("      DEBOUNCE - BPM:");
+        Serial.print(bpmDebouncer.hasValidReading() ? "valid" : "invalid");
+        Serial.print(" SpO2:");
+        Serial.print(spo2Debouncer.hasValidReading() ? "valid" : "invalid");
+        Serial.println();
         
         // Clear display
         display.clearDisplay();
@@ -262,6 +323,7 @@ void loop() {
             display.setTextSize(1);
             display.setCursor(20, 25);
             display.println("Place finger");
+            Serial.println("      DISPLAY: 'Place finger'");
         } else {
             // Compact display format for Arduino Uno
             display.setTextSize(1);
@@ -295,15 +357,18 @@ void loop() {
             display.setCursor(0, 15);
             if (bpmDebouncer.isStable() && spo2Debouncer.isStable()) {
                 display.println("STABLE");
+                Serial.println("      DISPLAY: Readings STABLE");
             } else {
                 display.println("Stabilizing");
+                Serial.println("      DISPLAY: Stabilizing...");
             }
         }
         
         display.display();
+        Serial.println("      OLED: display.display() called");
         
-        // Serial output (minimal for Arduino Uno)
-        Serial.print("BPM:");
+        // Serial output with full details
+        Serial.print("      OUTPUT - BPM:");
         Serial.print(rawBpm);
         Serial.print("(");
         Serial.print(bpmDebouncer.isStable() ? "OK" : "...");
@@ -312,6 +377,7 @@ void loop() {
         Serial.print("(");
         Serial.print(spo2Debouncer.isStable() ? "OK" : "...");
         Serial.println(")");
+        Serial.println();
         
         tsLastReport = millis();
     }
