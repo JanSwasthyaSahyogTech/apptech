@@ -10,6 +10,8 @@
 // Arduino Uno: BPM stability=2000ms, interval=200ms; SpO2 stability=2000ms, interval=200ms
 // ESP32/ESP8266: BPM stability=3000ms, interval=100ms; SpO2 stability=3000ms, interval=100ms
 // Tests use Arduino Uno optimized parameters for compatibility
+// Display: 16x2 LCD with I2C backpack (address 0x27)
+// Sensor: MAX30100 pulse oximeter (address 0x57)
 
 // Simple test framework
 int testsRun = 0;

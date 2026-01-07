@@ -4,20 +4,18 @@
 // ============================================
 
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <LiquidCrystal_I2C.h>
 
-// OLED Display Settings
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET -1
-#define OLED_I2C_ADDRESS 0x27
+// LCD Display Settings (16x2 with I2C backpack)
+#define LCD_COLS 16
+#define LCD_ROWS 2
+#define LCD_I2C_ADDRESS 0x27
 
 // I2C Pins (Arduino Uno)
 #define I2C_SDA_PIN A4
 #define I2C_SCL_PIN A5
 
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
 
 void setup() {
   Serial.begin(9600);
@@ -31,13 +29,13 @@ void setup() {
   Serial.println("TEST 1: Scanning I2C Bus...");
   scanI2CBus();
   
-  // Test 2: OLED Display Initialization
-  Serial.println("\nTEST 2: Initializing OLED Display...");
-  testOLEDInitialization();
+  // Test 2: LCD Display Initialization
+  Serial.println("\nTEST 2: Initializing LCD Display...");
+  testLCDInitialization();
   
-  // Test 3: OLED Display Output
-  Serial.println("\nTEST 3: Testing OLED Display Output...");
-  testOLEDDisplay();
+  // Test 3: LCD Display Output
+  Serial.println("\nTEST 3: Testing LCD Display Output...");
+  testLCDDisplay();
   
   Serial.println("\n========================================");
   Serial.println("Diagnostic Complete");
@@ -87,58 +85,57 @@ void scanI2CBus() {
 }
 
 // ============================================
-// Test 2: OLED Initialization
+// Test 2: LCD Initialization
 // ============================================
-void testOLEDInitialization() {
-  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDRESS)) {
-    Serial.println("FAILED: SSD1306 allocation failed");
-    Serial.println("TROUBLESHOOTING:");
-    Serial.println("- Check if OLED is at address 0x3C");
-    Serial.println("- Verify SDA/SCL connections");
-    Serial.println("- Check OLED power supply (3.3V or 5V)");
-    return;
-  }
-  Serial.println("SUCCESS: SSD1306 initialized");
+void testLCDInitialization() {
+  lcd.init();
+  lcd.backlight();
+  Serial.println("SUCCESS: LCD initialized");
   Serial.print("Display size: ");
-  Serial.print(SCREEN_WIDTH);
+  Serial.print(LCD_COLS);
   Serial.print("x");
-  Serial.println(SCREEN_HEIGHT);
+  Serial.println(LCD_ROWS);
 }
 
 // ============================================
-// Test 3: OLED Display Output
+// Test 3: LCD Display Output
 // ============================================
-void testOLEDDisplay() {
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  
-  display.println("OLED Test");
-  display.println("--------");
-  display.println("If you see this,");
-  display.println("OLED is working!");
-  display.println("");
-  display.println("Checking I2C...");
-  
-  display.display();
-  Serial.println("SUCCESS: Text displayed on OLED");
+void testLCDDisplay() {
+  // Test 1: Display text
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("LCD Test");
+  lcd.setCursor(0, 1);
+  lcd.print("Working!");
+  Serial.println("SUCCESS: Text displayed on LCD");
   
   delay(3000);
   
-  // Test 2: Draw shapes
-  display.clearDisplay();
-  display.drawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, SSD1306_WHITE);
-  display.fillRect(5, 5, 20, 20, SSD1306_WHITE);
-  display.drawCircle(SCREEN_WIDTH/2, SCREEN_HEIGHT/2, 10, SSD1306_WHITE);
-  display.display();
-  Serial.println("SUCCESS: Shapes drawn on OLED");
+  // Test 2: Display BPM and SpO2 format
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("BPM:75* O2:98*");
+  lcd.setCursor(0, 1);
+  lcd.print("STABLE          ");
+  Serial.println("SUCCESS: BPM/SpO2 format displayed");
   
   delay(3000);
   
-  // Test 3: Invert display
-  display.invertDisplay(true);
+  // Test 3: Display "Place Finger" message
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Place Finger   ");
+  lcd.setCursor(0, 1);
+  lcd.print("                ");
+  Serial.println("SUCCESS: Place Finger message displayed");
+  
+  delay(3000);
+  
+  // Test 4: Backlight control
+  lcd.noBacklight();
+  Serial.println("Backlight OFF");
   delay(1000);
-  display.invertDisplay(false);
-  Serial.println("SUCCESS: Display inversion working");
+  lcd.backlight();
+  Serial.println("Backlight ON");
+  Serial.println("SUCCESS: Backlight control working");
 }

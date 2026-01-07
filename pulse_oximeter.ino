@@ -1,24 +1,22 @@
 // ============================================
 // Pulse Oximeter with Debounce - ESP8266/ESP32
 // ============================================
-// MAX30100 sensor with OLED display (SSD1306)
+// MAX30100 sensor with 16x2 LCD display (I2C)
 // Includes debounce logic for stable BPM and SpO2 readings
 // ============================================
 
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <LiquidCrystal_I2C.h>
 #include "MAX30100_PulseOximeter.h"
 
 // ============================================
 // CONFIGURATION - Adjust these values as needed
 // ============================================
 
-// OLED Display Settings
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET -1
-#define OLED_I2C_ADDRESS 0x27
+// LCD Display Settings (16x2 with I2C backpack)
+#define LCD_COLS 16
+#define LCD_ROWS 2
+#define LCD_I2C_ADDRESS 0x27
 
 // I2C Pins (Platform-specific)
 #ifdef ESP32
@@ -172,10 +170,10 @@ private:
 // Global Objects
 // ============================================
 
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
 PulseOximeter pox;
 uint32_t tsLastReport = 0;
-bool oledInitialized = false;
+bool lcdInitialized = false;
 
 // Debouncers for BPM and SpO2
 ReadingDebouncer<float> bpmDebouncer(BPM_TOLERANCE, BPM_STABILITY_DURATION_MS, 
@@ -231,34 +229,23 @@ void setup() {
         Serial.println("I2C SCL: A5");
     #endif
     
-    Serial.print("OLED I2C Address: 0x");
-    Serial.println(OLED_I2C_ADDRESS, HEX);
+    Serial.print("LCD I2C Address: 0x");
+    Serial.println(LCD_I2C_ADDRESS, HEX);
     Serial.println();
 
-    // Initialize OLED
-    Serial.println("Initializing OLED display...");
-    bool oledInitialized = display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDRESS);
-    if (!oledInitialized) {
-        Serial.println("WARNING: OLED initialization failed!");
-        Serial.println("Continuing without display...");
-        Serial.println("Troubleshooting:");
-        Serial.println("- Check I2C address (expected 0x27)");
-        Serial.println("- Verify SDA/SCL connections");
-        Serial.println("- Check OLED power supply");
-        Serial.println("- Run I2C scanner to detect devices");
-    } else {
-        Serial.println("SUCCESS: OLED initialized");
-        display.clearDisplay();
-        display.setTextSize(2);  
-        display.setTextColor(WHITE);
-        display.setCursor(10, 10);
-        display.println("Pulse");
-        display.setCursor(10, 30);
-        display.println("Oximeter");
-        display.display();
-        Serial.println("Display: Splash screen shown");
-        delay(2000);
-    }
+    // Initialize LCD
+    Serial.println("Initializing LCD display...");
+    lcd.init();
+    lcd.backlight();
+    lcdInitialized = true;
+    
+    Serial.println("SUCCESS: LCD initialized");
+    lcd.setCursor(0, 0);
+    lcd.print("Pulse Oximeter");
+    lcd.setCursor(0, 1);
+    lcd.print("Initializing...");
+    Serial.println("Display: Splash screen shown");
+    delay(2000);
 
     // Initialize pulse oximeter
     Serial.println("\nInitializing MAX30100 sensor...");
@@ -313,64 +300,59 @@ void loop() {
         Serial.print(spo2Debouncer.hasValidReading() ? "valid" : "invalid");
         Serial.println();
         
-        // Update OLED display if initialized
-        if (oledInitialized) {
-            // Clear display
-            display.clearDisplay();
-            
+        // Update LCD display if initialized
+        if (lcdInitialized) {
             // Check if finger is detected
             bool fingerDetected = bpmDebouncer.hasValidReading() || spo2Debouncer.hasValidReading();
             
             if (!fingerDetected && rawBpm == 0 && rawSpo2 == 0) {
-                // No finger detected - minimal display
-                display.setTextSize(1);
-                display.setCursor(20, 25);
-                display.println("Place finger");
-                Serial.println("      DISPLAY: 'Place finger'");
+                // No finger detected
+                lcd.setCursor(0, 0);
+                lcd.print("Place Finger   ");
+                lcd.setCursor(0, 1);
+                lcd.print("                ");
+                Serial.println("      DISPLAY: 'Place Finger'");
             } else {
-                // Compact display format for Arduino Uno
-                display.setTextSize(1);
-                display.setCursor(0, 0);
-                display.print("BPM:");
+                // Line 1: BPM reading
+                lcd.setCursor(0, 0);
+                lcd.print("BPM:");
                 
                 if (bpmDebouncer.isStable()) {
-                    display.print((int)bpmDebouncer.getStableReading());
-                    display.print("*");
+                    lcd.print((int)bpmDebouncer.getStableReading());
+                    lcd.print("* ");
                 } else if (bpmDebouncer.hasValidReading()) {
-                    display.print((int)rawBpm);
-                    display.print("?");
+                    lcd.print((int)rawBpm);
+                    lcd.print("? ");
                 } else {
-                    display.print("--");
+                    lcd.print("-- ");
                 }
                 
-                // SpO2 on same line
-                display.setCursor(70, 0);
-                display.print("O2:");
+                // Line 1: SpO2 reading
+                lcd.print("O2:");
                 if (spo2Debouncer.isStable()) {
-                    display.print(spo2Debouncer.getStableReading());
-                    display.print("*");
+                    lcd.print(spo2Debouncer.getStableReading());
+                    lcd.print("*");
                 } else if (spo2Debouncer.hasValidReading()) {
-                    display.print(rawSpo2);
-                    display.print("?");
+                    lcd.print(rawSpo2);
+                    lcd.print("?");
                 } else {
-                    display.print("--");
+                    lcd.print("--");
                 }
                 
-                // Status indicator
-                display.setCursor(0, 15);
+                // Line 2: Status
+                lcd.setCursor(0, 1);
                 if (bpmDebouncer.isStable() && spo2Debouncer.isStable()) {
-                    display.println("STABLE");
+                    lcd.print("STABLE          ");
                     Serial.println("      DISPLAY: Readings STABLE");
                 } else {
-                    display.println("Stabilizing");
+                    lcd.print("Stabilizing...  ");
                     Serial.println("      DISPLAY: Stabilizing...");
                 }
             }
             
-            display.display();
-            Serial.println("      OLED: display.display() called");
+            Serial.println("      LCD: Updated");
         } else {
-            Serial.println("      OLED: Skipped (not initialized)");
+            Serial.println("      LCD: Skipped (not initialized)");
         }
         
         // Serial output with full details
